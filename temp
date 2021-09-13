@@ -1,0 +1,76 @@
+# Resume Analyzer
+# Input: JD_File, List<Resume_File> 
+# Steps 
+# 1. PDF to Text Converter
+# 2. Remove Stop words from nltk.corpus and lemmantize(convert to root form e.g. ate to eat)
+# 2. Vectorize the docs using TF-IDF, Bagof Words, Summarization, etc.
+# 3. Compare Function - Cosine Similarity - Angle is small if similar
+# 4. return result 
+
+# Libs to Insall 
+# Extracting text from PDF        -------     pip install textract
+# Dependency for textextract      -------     pip install pdftotext
+# OS Dependency for texttopdf     -------     conda install -c conda-forge poppler
+# SkLearn and NLKT 
+
+# Internal Libs
+import os 
+
+# External Libs
+import textract
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity as cosine_compare
+
+from nltk.stem.wordnet import WordNetLemmatizer
+from nltk.corpus import stopwords as stp
+from nltk.corpus import wordnet
+import nltk
+nltk.download('stopwords')
+nltk.download('averaged_perceptron_tagger')
+nltk.download('wordnet')
+
+# Initializing Server
+lemmatizer = WordNetLemmatizer()
+analyzer = TfidfVectorizer().build_analyzer()
+
+def get_wordnet_pos(word):
+    """Map POS tag to first character lemmatize() accepts"""
+    tag = nltk.pos_tag([word])[0][1][0].upper()
+    tag_dict = {"J": wordnet.ADJ,
+                "N": wordnet.NOUN,
+                "V": wordnet.VERB,
+                "R": wordnet.ADV}
+    return tag_dict.get(tag, wordnet.NOUN)
+
+
+def stemmed_words(doc):
+    return (lemmatizer.lemmatize(w,get_wordnet_pos(w)) for w in analyzer(doc) if w not in set(stp.words('english')))
+    
+    
+    
+def process(jd, resumes):
+    jd_text = str(textract.process(jd).decode('utf-8')).lower()
+    resume_text = []
+    for resume in resumes:
+        resume_text.append(str(textract.process(resume).decode('utf-8')).lower())
+    
+    tfIdf = TfidfVectorizer(analyzer=stemmed_words)
+    
+    jd_vector = tfIdf.fit_transform([jd_text]).todense()
+    resume_vector = tfIdf.transform(resume_text).todense()
+    
+    cosine_similarity = []
+    for i in range(len(resume_vector)):
+        cosine_similarity.append(cosine_compare(jd_vector,resume_vector[i])[0][0])
+    
+    doc_rating = []
+    zipped_docs = zip(cosine_similarity,resumes)
+    sorted_doc_list = sorted(zipped_docs, key = lambda x: x[0], reverse=True)
+    for element in sorted_doc_list:
+        doc_rating_list = []
+        doc_rating_list.append(os.path.basename(element[1]))
+        doc_rating_list.append("{:.0%}".format(element[0]))
+        doc_rating.append(doc_rating_list)
+        
+    print(doc_rating)
